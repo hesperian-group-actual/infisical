@@ -1,0 +1,10 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile.standalone-infisical"
+
+[deploy]
+startCommand = "./standalone-entrypoint.sh"
+healthcheckPath = "/api/status"
+healthcheckTimeout = 120
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
