@@ -132,7 +132,7 @@ export const dailyResourceCleanUpQueueServiceFactory = ({
     await queueService.queue(QueueName.FrequentResourceCleanUp, QueueJobs.FrequentResourceCleanUp, undefined, {
       jobId: QueueJobs.FrequentResourceCleanUp,
       repeat: {
-        pattern: appCfg.isDailyResourceCleanUpDevelopmentMode ? "*/5 * * * *" : "0 * * * *",
+        pattern: appCfg.isDailyResourceCleanUpDevelopmentMode ? "*/5 * * * *" : "0 */6 * * *",
         key: QueueJobs.FrequentResourceCleanUp
       }
     });

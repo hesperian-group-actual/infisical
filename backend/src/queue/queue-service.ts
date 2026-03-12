@@ -888,11 +888,11 @@ export const queueServiceFactory = (
         removeOnFail: true
       });
 
-      // Schedule reconciliation job (runs every 2 minute)
+      // Schedule reconciliation job (runs every 6 hours in dev)
       await queueContainer[QueueName.QueueInternalReconciliation].add(QueueJobs.QueueReconciliation, undefined, {
         jobId: "queue-reconciliation-cron",
         repeat: {
-          pattern: "*/2 * * * *",
+          pattern: "0 */6 * * *",
           key: "queue-reconciliation-cron"
         },
         removeOnComplete: true,

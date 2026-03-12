@@ -89,10 +89,10 @@ export const telemetryQueueServiceFactory = ({
     );
 
     if (postHog) {
-      // Start aggregated events job (runs every five minutes)
+      // Start aggregated events job (runs every 6 hours in dev)
       await queueService.queue(QueueName.TelemetryAggregatedEvents, QueueJobs.TelemetryAggregatedEvents, undefined, {
         jobId: QueueName.TelemetryAggregatedEvents,
-        repeat: { pattern: "*/5 * * * *", utc: true, key: QueueName.TelemetryAggregatedEvents }
+        repeat: { pattern: "0 */6 * * *", utc: true, key: QueueName.TelemetryAggregatedEvents }
       });
     }
   };

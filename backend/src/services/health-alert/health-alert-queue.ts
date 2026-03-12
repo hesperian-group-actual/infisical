@@ -46,7 +46,7 @@ export const healthAlertServiceFactory = ({
     await queueService.queue(QueueName.HealthAlert, QueueJobs.HealthAlert, undefined, {
       jobId: QueueJobs.HealthAlert,
       repeat: {
-        pattern: "*/5 * * * *",
+        pattern: "0 */6 * * *",
         key: QueueJobs.HealthAlert
       }
     });

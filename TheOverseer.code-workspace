@@ -1,0 +1,22 @@
+{
+	"folders": [
+		{
+			"path": "../TheOverseer"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"folder-color.pathColors": [
+			{
+				"folderPath": "d:\\Github_Desktop_Repo\\infisical\\",
+				"color": "foldercolorizer.color_ffcc33"
+			},
+			{
+				"folderPath": "TheOverseer\\",
+				"color": "foldercolorizer.color_cc3300"
+			}
+		]
+	}
+}
