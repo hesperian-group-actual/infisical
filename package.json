@@ -19,6 +19,7 @@
     "husky": "^8.0.3"
   },
   "dependencies": {
+    "@infisical/sdk": "^5.0.0",
     "@radix-ui/react-radio-group": "^1.1.3",
     "secrets.js-grempe": "^2.0.0"
   }
