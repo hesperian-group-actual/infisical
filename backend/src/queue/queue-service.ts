@@ -1018,6 +1018,7 @@ export const queueServiceFactory = (
 
   const queue: TQueueServiceFactory["queue"] = async (name, job, data, opts) => {
     const q = queueContainer[name];
+    if (!q) return;
 
     const { jobId, repeat } = opts;
     const finalOptions = {
