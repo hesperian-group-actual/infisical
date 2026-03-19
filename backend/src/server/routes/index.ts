@@ -3025,6 +3025,27 @@ export const registerRoutes = async (
   await server.register(injectRateLimits);
   await server.register(injectAuditLogInfo);
 
+  // Lightweight liveness probe with zero DB dependency.
+  server.route({
+    method: "GET",
+    url: "/healthcheck",
+    config: {
+      rateLimit: readLimit
+    },
+    schema: {
+      response: {
+        200: z.object({
+          status: z.literal("ok"),
+          date: z.date()
+        })
+      }
+    },
+    handler: async () => ({
+      status: "ok" as const,
+      date: new Date()
+    })
+  });
+
   server.route({
     method: "GET",
     url: "/api/status",

@@ -45,6 +45,13 @@ Goal: Neon should mostly wake when your apps request secrets/env values, not bec
     - `max: 10` -> `max: 5`
   - Purpose: avoid holding idle Neon connections so compute can scale down when idle.
 
+- **Railway healthcheck no longer hits a DB-backed route**
+  - File: `backend/src/server/routes/index.ts`
+  - Added lightweight route: `GET /healthcheck` that returns `{ status: "ok", date }` with no DB access.
+  - File: `railway.toml`
+  - Changed Railway `healthcheckPath` from `/api/status` to `/healthcheck`.
+  - Purpose: prevent constant DB reads caused by infra health probes.
+
 ## Effective behavior now
 
 With defaults from these changes:
@@ -53,6 +60,7 @@ With defaults from these changes:
 - No queue worker background jobs.
 - No per-minute SSE permission refresh loop.
 - No permanently pinned minimum DB connections.
+- Infra liveness checks do not query Postgres.
 
 Result: Infisical behaves closer to "request-driven secret manager" mode.
 
