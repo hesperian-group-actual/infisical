@@ -331,6 +331,12 @@ export const refreshOauthConfig = () => {
 };
 
 export const initializeOauthConfigSync = async () => {
+  const appCfg = getConfig();
+  if (appCfg.MINIMAL_SECRET_MANAGER_MODE) {
+    logger.info("MINIMAL_SECRET_MANAGER_MODE enabled; skipping OAuth config background sync");
+    return undefined;
+  }
+
   logger.info("Setting up background sync process for oauth configuration");
 
   // sync every 5 minutes

@@ -156,8 +156,9 @@ const envSchema = z
     // TODO(akhilmhdh): will be changed to one
     ENCRYPTION_KEY: zpStr(z.string().optional()),
     ROOT_ENCRYPTION_KEY: zpStr(z.string().optional()),
-    QUEUE_WORKERS_ENABLED: zodStrBool.default("true"),
+    QUEUE_WORKERS_ENABLED: zodStrBool.default("false"),
     QUEUE_WORKER_PROFILE: z.nativeEnum(QueueWorkerProfile).default(QueueWorkerProfile.All),
+    MINIMAL_SECRET_MANAGER_MODE: zodStrBool.default("true"),
     HTTPS_ENABLED: zodStrBool,
     ROTATION_DEVELOPMENT_MODE: zodStrBool.default("false").optional(),
     DAILY_RESOURCE_CLEAN_UP_DEVELOPMENT_MODE: zodStrBool.default("false").optional(),

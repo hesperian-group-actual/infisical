@@ -2973,35 +2973,39 @@ export const registerRoutes = async (
   });
 
   const cronJobs: CronJob[] = [];
-  if (appCfg.isProductionMode) {
-    const rateLimitSyncJob = await rateLimitService.initializeBackgroundSync();
-    if (rateLimitSyncJob) {
-      cronJobs.push(rateLimitSyncJob);
-    }
-    const licenseSyncJob = await licenseService.initializeBackgroundSync();
-    if (licenseSyncJob) {
-      cronJobs.push(licenseSyncJob);
+  if (!appCfg.MINIMAL_SECRET_MANAGER_MODE) {
+    if (appCfg.isProductionMode) {
+      const rateLimitSyncJob = await rateLimitService.initializeBackgroundSync();
+      if (rateLimitSyncJob) {
+        cronJobs.push(rateLimitSyncJob);
+      }
+      const licenseSyncJob = await licenseService.initializeBackgroundSync();
+      if (licenseSyncJob) {
+        cronJobs.push(licenseSyncJob);
+      }
+
+      const microsoftTeamsSyncJob = await microsoftTeamsService.initializeBackgroundSync();
+      if (microsoftTeamsSyncJob) {
+        cronJobs.push(microsoftTeamsSyncJob);
+      }
+
+      const adminIntegrationsSyncJob = await superAdminService.initializeAdminIntegrationConfigSync();
+      if (adminIntegrationsSyncJob) {
+        cronJobs.push(adminIntegrationsSyncJob);
+      }
     }
 
-    const microsoftTeamsSyncJob = await microsoftTeamsService.initializeBackgroundSync();
-    if (microsoftTeamsSyncJob) {
-      cronJobs.push(microsoftTeamsSyncJob);
+    const configSyncJob = await superAdminService.initializeEnvConfigSync();
+    if (configSyncJob) {
+      cronJobs.push(configSyncJob);
     }
 
-    const adminIntegrationsSyncJob = await superAdminService.initializeAdminIntegrationConfigSync();
-    if (adminIntegrationsSyncJob) {
-      cronJobs.push(adminIntegrationsSyncJob);
+    const oauthConfigSyncJob = await initializeOauthConfigSync();
+    if (oauthConfigSyncJob) {
+      cronJobs.push(oauthConfigSyncJob);
     }
-  }
-
-  const configSyncJob = await superAdminService.initializeEnvConfigSync();
-  if (configSyncJob) {
-    cronJobs.push(configSyncJob);
-  }
-
-  const oauthConfigSyncJob = await initializeOauthConfigSync();
-  if (oauthConfigSyncJob) {
-    cronJobs.push(oauthConfigSyncJob);
+  } else {
+    logger.info("MINIMAL_SECRET_MANAGER_MODE enabled; skipping recurring background sync cron jobs");
   }
 
   server.decorate<FastifyZodProvider["store"]>("store", {

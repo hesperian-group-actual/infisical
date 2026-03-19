@@ -11,6 +11,7 @@ import {
   ProjectPermissionSub
 } from "@app/ee/services/permission/project-permission";
 import { KeyStorePrefixes, KeyStoreTtls, TKeyStoreFactory } from "@app/keystore/keystore";
+import { getConfig } from "@app/lib/config/env";
 import { BadRequestError, RateLimitError } from "@app/lib/errors";
 import { logger } from "@app/lib/logger";
 
@@ -224,13 +225,17 @@ export const projectEventsSSEServiceFactory = ({
   };
 
   // Permission refresh interval
-  const refreshInterval = setInterval(() => {
-    for (const [clientId, entry] of clients) {
-      if (!entry.client.stream.closed) {
-        void $refreshPermission(clientId);
-      }
-    }
-  }, PERMISSION_REFRESH_INTERVAL);
+  // In minimal mode we skip periodic permission revalidation to avoid constant DB reads.
+  const cfg = getConfig();
+  const refreshInterval: ReturnType<typeof setInterval> | undefined = cfg.MINIMAL_SECRET_MANAGER_MODE
+    ? undefined
+    : setInterval(() => {
+        for (const [clientId, entry] of clients) {
+          if (!entry.client.stream.closed) {
+            void $refreshPermission(clientId);
+          }
+        }
+      }, PERMISSION_REFRESH_INTERVAL);
 
   /**
    * Check if client has permission to receive this event based on registrations
@@ -437,7 +442,7 @@ export const projectEventsSSEServiceFactory = ({
   const close = async () => {
     clearInterval(heartbeatInterval);
     clearInterval(pingInterval);
-    clearInterval(refreshInterval);
+    if (refreshInterval) clearInterval(refreshInterval);
 
     // Clean up keystore connections
     const cleanupPromises: Promise<void>[] = [];
