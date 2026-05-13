@@ -1,3 +1,4 @@
+# Standalone image: build context is monorepo root (Dockerfile.standalone-infisical).
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile.standalone-infisical"
