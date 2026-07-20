@@ -221,7 +221,10 @@ ENV HTTPS_ENABLED false
 ENV NODE_ENV production
 ENV STANDALONE_BUILD true
 ENV STANDALONE_MODE true
-ENV NODE_OPTIONS="--max-old-space-size=2048"
+# Runtime heap cap for light self-host / Railway usage.
+# Override via Railway env (e.g. NODE_OPTIONS=--max-old-space-size=512) if needed.
+# Official "small" sizing is higher; 768MB is enough for low-traffic secret fetches.
+ENV NODE_OPTIONS="--max-old-space-size=768"
 ENV ChrystokiConfigurationPath=/usr/safenet/lunaclient/
 
 WORKDIR /backend

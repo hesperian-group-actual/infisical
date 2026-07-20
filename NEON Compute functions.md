@@ -87,23 +87,55 @@ Result: Infisical behaves closer to "request-driven secret manager" mode.
 
 ## Railway env recommendations
 
-Set these for your Infisical service:
+Set these for your Infisical service (also defaulted in `railway.toml`):
 
 - `MINIMAL_SECRET_MANAGER_MODE=true`
 - `QUEUE_WORKERS_ENABLED=false`
+- `TELEMETRY_ENABLED=false`
+- `DISABLE_AUDIT_LOG_STORAGE=true` (ok if you only fetch secrets and do not need DB audit history)
+- `NODE_OPTIONS=--max-old-space-size=768` (or `512` if the service stays healthy)
+
+## Railway RAM cost (why Infisical alone can be ~$7+)
+
+Railway bills **actual memory continuously** while the Infisical container is running. For “call secrets a few times a day,” CPU and network are tiny; **RAM is almost the whole Infisical line item**.
+
+What we saw / fixed in this fork:
+
+| Symptom | Cause | Mitigation |
+|---------|--------|------------|
+| ~2.0–2.1 GB steady RAM on the Infisical service | Production image used `NODE_OPTIONS=--max-old-space-size=2048` | Cap heap at **768** (Dockerfile + `railway.toml`); try **512** if stable |
+| Always-on bill even with almost no traffic | Railway does **not** scale this service to zero | Lower RAM, or move to Infisical Cloud / a scale-to-zero host |
+| Extra Neon compute (separate from Railway RAM) | Healthchecks / crons / queue workers | Already addressed via `/healthcheck` + minimal mode |
+
+Rough math: cutting steady RAM from ~2 GB → ~0.75 GB is on the order of a **~60% drop** on the Infisical RAM charge. Other project services (Redis, Postgres if on Railway, etc.) are separate line items.
+
+### Railway checklist (RAM)
+
+1. Redeploy with the lower `NODE_OPTIONS` (768 default in this branch).
+2. In Railway → Infisical service → Metrics, confirm RAM baseline falls below ~1 GB after deploy.
+3. If the process OOMs, bump only as needed: `512` → `768` → `1024` (do not go back to `2048` unless you must).
+4. Keep a **single replica**. Extra replicas multiply RAM cost.
+5. Prefer **Neon** (autosuspend) for Postgres rather than an always-on Railway Postgres if DB is still on Railway.
+6. Keep Redis as small as Railway allows; Infisical still requires Redis even with queue workers off.
+7. Optional escape hatch: use **Infisical Cloud** free/hobby for tiny secret traffic and delete the self-hosted Railway Infisical service.
 
 ## Deployment checklist (copy/paste)
 
 1. Deploy code containing:
    - `backend/src/server/routes/index.ts` with `/healthcheck`
-   - `railway.toml` with `healthcheckPath = "/healthcheck"`
+   - `railway.toml` with `healthcheckPath = "/healthcheck"` and low-RAM `NODE_OPTIONS`
+   - `Dockerfile.standalone-infisical` / `standalone-entrypoint.sh` with heap capped at 768MB
 2. In Railway service settings, verify health check path is `/healthcheck`.
-3. Confirm env vars:
+3. Confirm env vars (or rely on `railway.toml` defaults):
    - `MINIMAL_SECRET_MANAGER_MODE=true`
    - `QUEUE_WORKERS_ENABLED=false`
+   - `NODE_OPTIONS=--max-old-space-size=768`
+   - `TELEMETRY_ENABLED=false`
+   - `DISABLE_AUDIT_LOG_STORAGE=true`
 4. Keep Neon endpoint autosuspend enabled and minimum CU low.
 5. Verify after idle period:
    - Neon compute activity drops when no app requests are made.
+   - Railway Infisical RAM baseline is well under ~2 GB (target ~0.5–1 GB).
 
 ## If you still see overnight compute
 

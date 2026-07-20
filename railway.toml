@@ -9,3 +9,13 @@ healthcheckPath = "/healthcheck"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5
+
+# Cost / idle-load defaults for low-traffic secret-manager use on Railway.
+# Railway bills RAM continuously while the service is up — keep the heap small.
+# Override any of these in the Railway dashboard if you need full-featured mode.
+[variables]
+NODE_OPTIONS = "--max-old-space-size=768"
+MINIMAL_SECRET_MANAGER_MODE = "true"
+QUEUE_WORKERS_ENABLED = "false"
+TELEMETRY_ENABLED = "false"
+DISABLE_AUDIT_LOG_STORAGE = "true"
