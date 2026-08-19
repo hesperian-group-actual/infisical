@@ -41,18 +41,22 @@ export const bootstrapCheck = async ({ db }: BootstrapOpt) => {
   }
 
   console.info("Checking configurations...");
-  console.info("Testing smtp connection");
 
-  const smtpCfg = formatSmtpConfig();
-  await createTransport(smtpCfg)
-    .verify()
-    .then(async () => {
-      console.info(`SMTP - Verified connection to ${appCfg.SMTP_HOST}:${appCfg.SMTP_PORT}`);
-    })
-    .catch((err: Error) => {
-      console.error(`SMTP - Failed to connect to ${appCfg.SMTP_HOST}:${appCfg.SMTP_PORT} - ${err.message}`);
-      logger.error(err);
-    });
+  if (!appCfg.isSmtpConfigured) {
+    console.info("SMTP not configured; skipping smtp connection check");
+  } else {
+    console.info("Testing smtp connection");
+    const smtpCfg = formatSmtpConfig();
+    await createTransport(smtpCfg)
+      .verify()
+      .then(async () => {
+        console.info(`SMTP - Verified connection to ${appCfg.SMTP_HOST}:${appCfg.SMTP_PORT}`);
+      })
+      .catch((err: Error) => {
+        console.error(`SMTP - Failed to connect to ${appCfg.SMTP_HOST}:${appCfg.SMTP_PORT} - ${err.message}`);
+        logger.error(err);
+      });
+  }
 
   console.log("Testing Postgres connection");
   await db

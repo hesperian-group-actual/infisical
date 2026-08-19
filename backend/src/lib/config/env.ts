@@ -475,6 +475,8 @@ const envSchema = z
     isSmtpConfigured: Boolean(data.SMTP_HOST),
     isRedisConfigured:
       !data.USE_IN_MEMORY_STORE && Boolean(data.REDIS_URL || data.REDIS_SENTINEL_HOSTS || data.REDIS_CLUSTER_HOSTS),
+    // Ignore a leftover REDIS_URL when running without Redis (e.g. Railway after deleting Upstash).
+    REDIS_URL: data.USE_IN_MEMORY_STORE ? undefined : data.REDIS_URL,
     isClickHouseConfigured: Boolean(data.CLICKHOUSE_URL),
     isDevelopmentMode: data.NODE_ENV === "development",
     isTestMode: data.NODE_ENV === "test",
