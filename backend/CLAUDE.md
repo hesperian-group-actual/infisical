@@ -172,9 +172,9 @@ Key plugins in `src/server/plugins/`:
 
 ### Database Configuration
 
-Knex config in `src/db/knexfile.ts`. Loads `.env.migration` then `.env`. Supports `DB_CONNECTION_URI` or individual host/port/user/name/password fields. Optional SSL via `DB_ROOT_CERT` (base64-encoded CA cert). Connection pool defaults are tuned for Neon scale-down (`min: 0`, `max: 5`). Migrations table: `infisical_migrations`. Separate audit log DB supported via `auditlog-migration:*` scripts. ClickHouse for analytics (optional).
+Knex config in `src/db/knexfile.ts`. Loads `.env.migration` then `.env`. Supports `DB_CONNECTION_URI` or individual host/port/user/name/password fields. Optional SSL via `DB_ROOT_CERT` (base64-encoded CA cert). Connection pool defaults are tuned for Neon/Railway scale-down (`min: 0`, `max: 5`, `idleTimeoutMillis: 10000`). Migrations table: `infisical_migrations`. Separate audit log DB supported via `auditlog-migration:*` scripts. ClickHouse for analytics (optional).
 
-Minimal secret-manager mode can be enabled via `MINIMAL_SECRET_MANAGER_MODE=true` (default in this workspace). In this mode, recurring background sync cron jobs are skipped to reduce steady DB usage.
+Minimal secret-manager mode can be enabled via `MINIMAL_SECRET_MANAGER_MODE=true` (default in this workspace). In this mode, recurring background sync cron jobs are skipped to reduce steady DB usage. `USE_IN_MEMORY_STORE=true` (standalone/Railway image default) skips Redis entirely so a Railway Serverless service can sleep; set it `false` and provide `REDIS_URL` for multi-replica or queue workers.
 
 Migrations in `src/db/migrations/`. Auto-generated Zod schemas in `src/db/schemas/`.
 

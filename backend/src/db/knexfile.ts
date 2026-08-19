@@ -35,7 +35,9 @@ export default {
     },
     pool: {
       min: 0,
-      max: 5
+      max: 5,
+      idleTimeoutMillis: 10_000,
+      reapIntervalMillis: 1_000
     },
     seeds: {
       directory: "./seeds"
@@ -63,7 +65,9 @@ export default {
     },
     pool: {
       min: 0,
-      max: 5
+      max: 5,
+      idleTimeoutMillis: 10_000,
+      reapIntervalMillis: 1_000
     },
     migrations: {
       tableName: "infisical_migrations",

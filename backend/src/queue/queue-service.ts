@@ -588,8 +588,12 @@ export const queueServiceFactory = (
   redisCfg: TRedisConfigKeys,
   queueJobsDAL: TQueueJobsDALFactory
 ): TQueueServiceFactory => {
+  const appCfgAtBoot = getConfig();
   const isClusterMode = Boolean(redisCfg?.REDIS_CLUSTER_HOSTS);
-  const connection = buildRedisFromConfig(redisCfg);
+  // BullMQ holds persistent Redis sockets (PING/keepalive). Skip them when workers are off
+  // or when running the in-memory store so Railway serverless can actually sleep.
+  const connection =
+    !appCfgAtBoot.USE_IN_MEMORY_STORE && appCfgAtBoot.QUEUE_WORKERS_ENABLED ? buildRedisFromConfig(redisCfg) : null;
   const queueContainer = {} as Record<
     QueueName,
     Queue<TQueueJobTypes[QueueName]["payload"], void, TQueueJobTypes[QueueName]["name"]>
@@ -837,6 +841,11 @@ export const queueServiceFactory = (
   const initialize = async () => {
     const appCfg = getConfig();
 
+    if (!connection || !appCfg.QUEUE_WORKERS_ENABLED) {
+      logger.info("Skipping BullMQ initialization (queue workers disabled or in-memory store)");
+      return;
+    }
+
     const fipsSettings = crypto.isFipsModeEnabled() ? { settings: { repeatKeyHashAlgorithm: "sha256" as const } } : {};
 
     // Initialize internal recovery queue (BullMQ for distributed coordination)
@@ -910,7 +919,7 @@ export const queueServiceFactory = (
 
     const appCfg = getConfig();
 
-    if (!appCfg.QUEUE_WORKERS_ENABLED) return;
+    if (!connection || !appCfg.QUEUE_WORKERS_ENABLED) return;
 
     if (appCfg.QUEUE_WORKER_PROFILE === QueueWorkerProfile.Standard && NON_STANDARD_QUEUES.includes(name)) {
       // only process standard jobs
@@ -1008,7 +1017,7 @@ export const queueServiceFactory = (
 
   const listen: TQueueServiceFactory["listen"] = (name, event, listener) => {
     const appCfg = getConfig();
-    if (!appCfg.QUEUE_WORKERS_ENABLED || !isQueueEnabled(name)) {
+    if (!connection || !appCfg.QUEUE_WORKERS_ENABLED || !isQueueEnabled(name)) {
       return;
     }
 
@@ -1062,20 +1071,21 @@ export const queueServiceFactory = (
 
   const getRepeatableJobs: TQueueServiceFactory["getRepeatableJobs"] = (name, startOffset, endOffset) => {
     const q = queueContainer[name];
-    if (!q) throw new Error(`Queue '${name}' not initialized`);
+    if (!q) return Promise.resolve([]);
 
     return q.getRepeatableJobs(startOffset, endOffset);
   };
 
   const getDelayedJobs: TQueueServiceFactory["getDelayedJobs"] = (name, startOffset, endOffset) => {
     const q = queueContainer[name];
-    if (!q) throw new Error(`Queue '${name}' not initialized`);
+    if (!q) return Promise.resolve([]);
 
     return q.getDelayed(startOffset, endOffset);
   };
 
   const stopRepeatableJobByJobId: TQueueServiceFactory["stopRepeatableJobByJobId"] = async (name, jobId) => {
     const q = queueContainer[name];
+    if (!q) return true;
     const job = await q.getJob(jobId);
     if (!job) return true;
     if (!job.repeatJobKey) return true;
@@ -1085,23 +1095,25 @@ export const queueServiceFactory = (
 
   const stopRepeatableJobByKey: TQueueServiceFactory["stopRepeatableJobByKey"] = async (name, repeatJobKey) => {
     const q = queueContainer[name];
+    if (!q) return false;
     return q.removeRepeatableByKey(repeatJobKey);
   };
 
   const stopJobById: TQueueServiceFactory["stopJobById"] = async (name, jobId) => {
     const q = queueContainer[name];
-    const job = await q.getJob(jobId);
-
     const isPersistantQueue = persistantQueues.has(name);
     if (isPersistantQueue) {
       await queueJobsDAL.delete({ jobId, queueName: name });
     }
+    if (!q) return undefined;
+    const job = await q.getJob(jobId);
 
     return job?.remove().catch(() => undefined);
   };
 
   const clearQueue: TQueueServiceFactory["clearQueue"] = async (name) => {
     const q = queueContainer[name];
+    if (!q) return;
     await q.drain();
   };
 

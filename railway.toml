@@ -9,13 +9,18 @@ healthcheckPath = "/healthcheck"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5
+# Railway healthchecks run only at deploy time (they do not keep the service awake).
+# To actually stop paying RAM when idle: Service → Settings → Deploy → Enable Serverless.
+# Serverless cannot be set in this file; it is a dashboard toggle.
 
 # Cost / idle-load defaults for low-traffic secret-manager use on Railway.
 # Railway bills RAM continuously while the service is up — keep the heap small.
+# USE_IN_MEMORY_STORE skips Redis sockets (the reason this service never slept).
 # Override any of these in the Railway dashboard if you need full-featured mode.
 [variables]
 NODE_OPTIONS = "--max-old-space-size=768"
 MINIMAL_SECRET_MANAGER_MODE = "true"
 QUEUE_WORKERS_ENABLED = "false"
+USE_IN_MEMORY_STORE = "true"
 TELEMETRY_ENABLED = "false"
 DISABLE_AUDIT_LOG_STORAGE = "true"

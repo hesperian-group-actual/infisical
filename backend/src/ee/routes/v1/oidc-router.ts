@@ -44,15 +44,17 @@ export const registerOidcRouter = async (server: FastifyZodProvider) => {
   - Current redis usage is not ideal and will eventually have to be refactored to use a better structure
   - Fastify session <> Redis structure is based on the ff: https://github.com/fastify/session/blob/master/examples/redis.js
   */
-  const redisStore = new RedisStore({
-    client: server.redis,
-    prefix: "oidc-session:",
-    ttl: 600 // 10 minutes
-  });
-
   await server.register(fastifySession, {
     secret: appCfg.COOKIE_SECRET_SIGN_KEY,
-    store: redisStore,
+    ...(server.redis
+      ? {
+          store: new RedisStore({
+            client: server.redis,
+            prefix: "oidc-session:",
+            ttl: 600 // 10 minutes
+          })
+        }
+      : {}),
     cookie: {
       secure: appCfg.HTTPS_ENABLED,
       sameSite: "lax" // we want cookies to be sent to Infisical in redirects originating from IDP server

@@ -12,6 +12,7 @@ import { runMigrations } from "./auto-start-migrations";
 import { initAuditLogDbConnection, initDbConnection } from "./db";
 import { hsmServiceFactory } from "./ee/services/hsm/hsm-service";
 import { keyStoreFactory } from "./keystore/keystore";
+import { inMemoryKeyStore } from "./keystore/memory";
 import { buildClickHouseFromConfig } from "./lib/config/clickhouse";
 import { formatSmtpConfig, getDatabaseCredentials, getHsmConfig, initEnvConfig } from "./lib/config/env";
 import { buildRedisFromConfig } from "./lib/config/redis";
@@ -82,9 +83,14 @@ const run = async () => {
   const queueJobsDAL = queueJobsDALFactory(db);
   const queue = queueServiceFactory(envConfig, queueJobsDAL);
 
-  const keyValueStoreDAL = keyValueStoreDALFactory(db);
-  const keyStore = keyStoreFactory(envConfig, keyValueStoreDAL);
-  const redis = buildRedisFromConfig(envConfig);
+  const useInMemoryStore = envConfig.USE_IN_MEMORY_STORE;
+  if (useInMemoryStore) {
+    logger.info(
+      "USE_IN_MEMORY_STORE enabled; skipping Redis clients (in-memory cache/locks). This lets Railway serverless sleep after idle outbound traffic stops."
+    );
+  }
+  const keyStore = useInMemoryStore ? inMemoryKeyStore() : keyStoreFactory(envConfig, keyValueStoreDALFactory(db));
+  const redis = useInMemoryStore ? null : buildRedisFromConfig(envConfig);
 
   const server = await main({
     db,

@@ -3,7 +3,7 @@ title: "Environment Variables"
 description: "Read how to configure environment variables for self-hosted Infisical."
 ---
 
-Infisical accepts all configurations via environment variables. For a minimal self-hosted instance, at least `ENCRYPTION_KEY`, `AUTH_SECRET`, `DB_CONNECTION_URI` and `REDIS_URL` must be defined.
+Infisical accepts all configurations via environment variables. For a minimal self-hosted instance, at least `ENCRYPTION_KEY`, `AUTH_SECRET`, and `DB_CONNECTION_URI` must be defined. Redis is required unless `USE_IN_MEMORY_STORE=true` (single-instance / Railway serverless deployments).
 However, you can configure additional settings to activate more features as needed.
 
 ## General platform
@@ -164,8 +164,8 @@ Redis is used for caching and background tasks. You can use either a standalone 
 
 <Tabs>
   <Tab title="Redis Standalone">
-    <ParamField query="REDIS_URL" type="string" default="none" required>
-      Redis connection string. For SSL/TLS connections, use the `rediss://` protocol (note the double 's').
+    <ParamField query="REDIS_URL" type="string" default="none">
+      Redis connection string. Required unless `USE_IN_MEMORY_STORE=true`. For SSL/TLS connections, use the `rediss://` protocol (note the double 's').
       
       Examples:
       - Without SSL: `redis://localhost:6379`
@@ -258,6 +258,22 @@ NODE_EXTRA_CA_CERTS=/path/to/ca.crt
 ```
 
 For Redis Sentinel or Cluster mode, use the `REDIS_SENTINEL_ENABLE_TLS` or `REDIS_CLUSTER_ENABLE_TLS` environment variables respectively.
+
+### Low-traffic / Railway (optional Redis)
+
+Use these when Infisical is a single replica that only serves occasional secret fetches (for example Railway with Serverless enabled). Persistent Redis connections send keepalives, which Railway treats as outbound traffic, so the service never sleeps.
+
+<ParamField query="USE_IN_MEMORY_STORE" type="string" default="false">
+  When `true`, Infisical does not connect to Redis. Cache, locks, and OAuth sessions stay in process memory. Safe for a single replica. Set `false` and provide `REDIS_URL` for multi-replica, background workers, or SSO that must survive restarts.
+</ParamField>
+
+<ParamField query="MINIMAL_SECRET_MANAGER_MODE" type="string" default="true">
+  Skip recurring background sync crons (env/OAuth/license/Teams, SSE permission refresh). Secret API reads still work.
+</ParamField>
+
+<ParamField query="QUEUE_WORKERS_ENABLED" type="string" default="false">
+  Start BullMQ workers. Leave `false` unless you need secret sync, rotation, audit-log jobs, etc.
+</ParamField>
 
 ## Email Service
 

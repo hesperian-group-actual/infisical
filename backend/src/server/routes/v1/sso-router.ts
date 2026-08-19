@@ -349,15 +349,17 @@ export const initializeOauthConfigSync = async () => {
 export const registerSsoRouter = async (server: FastifyZodProvider) => {
   const appCfg = getConfig();
 
-  const redisStore = new RedisStore({
-    client: server.redis,
-    prefix: "oauth-session:",
-    ttl: 600 // 10 minutes
-  });
-
   await server.register(fastifySession, {
     secret: appCfg.COOKIE_SECRET_SIGN_KEY,
-    store: redisStore,
+    ...(server.redis
+      ? {
+          store: new RedisStore({
+            client: server.redis,
+            prefix: "oauth-session:",
+            ttl: 600 // 10 minutes
+          })
+        }
+      : {}),
     cookie: {
       secure: appCfg.HTTPS_ENABLED,
       sameSite: "lax" // we want cookies to be sent to Infisical in redirects originating from IDP server

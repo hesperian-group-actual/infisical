@@ -45,7 +45,7 @@ type TMain = {
   logger?: CustomLogger;
   queue: TQueueServiceFactory;
   keyStore: TKeyStoreFactory;
-  redis: Redis | Cluster;
+  redis: Redis | Cluster | null;
   clickhouse: ClickHouseClient | null;
   envConfig: TEnvConfig;
   superAdminDAL: TSuperAdminDALFactory;

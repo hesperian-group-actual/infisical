@@ -67,10 +67,17 @@ export const initDbConnection = ({
       user: process.env.DB_USER,
       database: process.env.DB_NAME,
       password: process.env.DB_PASSWORD,
-      ssl: sslConfig
+      ssl: sslConfig,
+      keepAlive: false
     },
-    // https://knexjs.org/guide/#pool
-    pool: { min: 0, max: 10 },
+    // Close idle clients quickly so Railway serverless can sleep (inactivity is
+    // measured by outbound packets, including Postgres keepalives).
+    pool: {
+      min: 0,
+      max: 5,
+      idleTimeoutMillis: 10_000,
+      reapIntervalMillis: 1_000
+    },
     migrations: {
       tableName: "infisical_migrations"
     }
@@ -87,12 +94,18 @@ export const initDbConnection = ({
       client: "pg",
       connection: {
         connectionString: replicaUri,
-        ssl: replicaSslConfig
+        ssl: replicaSslConfig,
+        keepAlive: false
       },
       migrations: {
         tableName: "infisical_migrations"
       },
-      pool: { min: 0, max: 10 }
+      pool: {
+        min: 0,
+        max: 5,
+        idleTimeoutMillis: 10_000,
+        reapIntervalMillis: 1_000
+      }
     });
   });
 
@@ -120,12 +133,18 @@ export const initAuditLogDbConnection = ({
       user: process.env.AUDIT_LOGS_DB_USER,
       database: process.env.AUDIT_LOGS_DB_NAME,
       password: process.env.AUDIT_LOGS_DB_PASSWORD,
-      ssl: sslConfig
+      ssl: sslConfig,
+      keepAlive: false
     },
     migrations: {
       tableName: "infisical_migrations"
     },
-    pool: { min: 0, max: 10 }
+    pool: {
+      min: 0,
+      max: 5,
+      idleTimeoutMillis: 10_000,
+      reapIntervalMillis: 1_000
+    }
   });
 
   // we add these overrides so that auditLogDb and the primary DB are interchangeable

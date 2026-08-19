@@ -243,7 +243,7 @@ declare module "fastify" {
   }
 
   interface FastifyInstance {
-    redis: Redis | Cluster;
+    redis: Redis | Cluster | null;
     services: {
       login: TAuthLoginFactory;
       password: TAuthPasswordFactory;

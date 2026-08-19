@@ -75,20 +75,22 @@ This was validated by user feedback after deploy as the change that stopped the 
 
 ## Effective behavior now
 
-With defaults from these changes:
+With Railway/standalone defaults from these changes:
 
 - No recurring sync cron jobs.
 - No queue worker background jobs.
+- No Redis clients (in-memory cache/locks; OAuth sessions are in-process).
 - No per-minute SSE permission refresh loop.
-- No permanently pinned minimum DB connections.
+- No permanently pinned minimum DB connections; idle clients close after 10s.
 - Infra liveness checks do not query Postgres.
 
-Result: Infisical behaves closer to "request-driven secret manager" mode.
+Result: Infisical behaves closer to "request-driven secret manager" mode, and Railway Serverless can sleep it after 10 minutes of no outbound traffic.
 
 ## Railway env recommendations
 
-Set these for your Infisical service (also defaulted in `railway.toml`):
+Set these for your Infisical service (also defaulted in `railway.toml` / standalone image):
 
+- `USE_IN_MEMORY_STORE=true`
 - `MINIMAL_SECRET_MANAGER_MODE=true`
 - `QUEUE_WORKERS_ENABLED=false`
 - `TELEMETRY_ENABLED=false`
@@ -99,43 +101,59 @@ Set these for your Infisical service (also defaulted in `railway.toml`):
 
 Railway bills **actual memory continuously** while the Infisical container is running. For “call secrets a few times a day,” CPU and network are tiny; **RAM is almost the whole Infisical line item**.
 
-What we saw / fixed in this fork:
+Infisical is a long-running Node process. It will **not** go serverless by itself. Railway Serverless sleeps a service only after **10 minutes with zero outbound packets**. Persistent Redis TCP (ioredis PING, pub/sub subscribe) and idle Postgres keepalives both count as outbound, so the container never slept even when nobody was fetching secrets.
 
 | Symptom | Cause | Mitigation |
 |---------|--------|------------|
 | ~2.0–2.1 GB steady RAM on the Infisical service | Production image used `NODE_OPTIONS=--max-old-space-size=2048` | Cap heap at **768** (Dockerfile + `railway.toml`); try **512** if stable |
-| Always-on bill even with almost no traffic | Railway does **not** scale this service to zero | Lower RAM, or move to Infisical Cloud / a scale-to-zero host |
+| Always-on bill / never sleeps | Redis sockets + DB keepalives reset Railway’s 10-minute outbound timer | `USE_IN_MEMORY_STORE=true`, drop the Redis service, pool `idleTimeoutMillis=10s`, **enable Serverless** in Railway |
 | Extra Neon compute (separate from Railway RAM) | Healthchecks / crons / queue workers | Already addressed via `/healthcheck` + minimal mode |
 
-Rough math: cutting steady RAM from ~2 GB → ~0.75 GB is on the order of a **~60% drop** on the Infisical RAM charge. Other project services (Redis, Postgres if on Railway, etc.) are separate line items.
+Rough math: cutting steady RAM from ~2 GB → ~0.75 GB is on the order of a **~60% drop** while the box is up. Sleeping most of the day drops the rest to near zero.
 
-### Railway checklist (RAM)
+### Railway checklist (RAM + sleep)
 
-1. Redeploy with the lower `NODE_OPTIONS` (768 default in this branch).
-2. In Railway → Infisical service → Metrics, confirm RAM baseline falls below ~1 GB after deploy.
-3. If the process OOMs, bump only as needed: `512` → `768` → `1024` (do not go back to `2048` unless you must).
-4. Keep a **single replica**. Extra replicas multiply RAM cost.
-5. Prefer **Neon** (autosuspend) for Postgres rather than an always-on Railway Postgres if DB is still on Railway.
-6. Keep Redis as small as Railway allows; Infisical still requires Redis even with queue workers off.
-7. Optional escape hatch: use **Infisical Cloud** free/hobby for tiny secret traffic and delete the self-hosted Railway Infisical service.
+1. Redeploy this branch (in-memory store + idle DB pool).
+2. In Railway → Infisical service → **Settings → Deploy → Enable Serverless**. This toggle is not in `railway.toml`.
+3. Confirm env (Dockerfile/standalone + `railway.toml` already set these):
+   - `USE_IN_MEMORY_STORE=true`
+   - `MINIMAL_SECRET_MANAGER_MODE=true`
+   - `QUEUE_WORKERS_ENABLED=false`
+   - `NODE_OPTIONS=--max-old-space-size=768`
+   - `TELEMETRY_ENABLED=false`
+4. **Remove the Redis plugin/service** from the Railway project if Infisical was the only client. It is unused in in-memory mode and bills its own RAM 24/7.
+5. Keep a **single replica**.
+6. Your own cron jobs that hit Infisical more often than every ~10 minutes will still prevent sleep (each fetch opens Postgres = outbound). Cache secrets in those jobs, or leave gaps longer than 10 minutes.
+7. After idle: Railway metrics should show the service **slept**; RAM GB-min should stop accruing until the next secret fetch.
+
+Logs that confirm the sleep-friendly boot:
+
+- `USE_IN_MEMORY_STORE enabled; skipping Redis clients`
+- `MINIMAL_SECRET_MANAGER_MODE enabled; skipping recurring background sync cron jobs`
+- `Skipping BullMQ initialization`
+- `Event bus initialized in memory-only mode`
 
 ## Deployment checklist (copy/paste)
 
 1. Deploy code containing:
+   - `USE_IN_MEMORY_STORE` wiring in `backend/src/main.ts`
    - `backend/src/server/routes/index.ts` with `/healthcheck`
-   - `railway.toml` with `healthcheckPath = "/healthcheck"` and low-RAM `NODE_OPTIONS`
+   - `railway.toml` with `healthcheckPath = "/healthcheck"`, `USE_IN_MEMORY_STORE=true`, and low-RAM `NODE_OPTIONS`
    - `Dockerfile.standalone-infisical` / `standalone-entrypoint.sh` with heap capped at 768MB
-2. In Railway service settings, verify health check path is `/healthcheck`.
-3. Confirm env vars (or rely on `railway.toml` defaults):
+2. In Railway → Infisical → Settings → Deploy: **Enable Serverless**. Health check path = `/healthcheck`.
+3. Confirm env vars (or rely on standalone image / `railway.toml` defaults):
+   - `USE_IN_MEMORY_STORE=true`
    - `MINIMAL_SECRET_MANAGER_MODE=true`
    - `QUEUE_WORKERS_ENABLED=false`
    - `NODE_OPTIONS=--max-old-space-size=768`
    - `TELEMETRY_ENABLED=false`
    - `DISABLE_AUDIT_LOG_STORAGE=true`
-4. Keep Neon endpoint autosuspend enabled and minimum CU low.
-5. Verify after idle period:
+4. Delete the Railway Redis service if Infisical was its only client.
+5. Keep Neon endpoint autosuspend enabled and minimum CU low.
+6. Verify after idle period:
+   - Infisical shows as **slept** in Railway.
    - Neon compute activity drops when no app requests are made.
-   - Railway Infisical RAM baseline is well under ~2 GB (target ~0.5–1 GB).
+   - Railway Infisical RAM GB-min stop accruing until the next wake.
 
 ## If you still see overnight compute
 
@@ -143,28 +161,36 @@ Small overnight charges (e.g. ~$0.01) can still happen. Check these:
 
 1. **Env vars in Railway**  
    For the Infisical service, confirm:
+   - `USE_IN_MEMORY_STORE=true`
    - `MINIMAL_SECRET_MANAGER_MODE=true` (or unset — code default is `true`)
    - `QUEUE_WORKERS_ENABLED=false` (or unset — code default is `false`)  
-   If either is overridden the wrong way, crons or queue workers will run again.
+   If Redis is still connected, Railway Serverless will never fire (outbound keepalives).
 
-2. **Railway healthcheck**  
+2. **Railway Serverless toggle**  
+   Settings → Deploy → Enable Serverless. Without this, the container stays up 24/7 even with zero traffic.
+
+3. **Your cron jobs**  
+   Each secret fetch opens Postgres (outbound) and resets the 10-minute sleep timer. Crons tighter than ~10 minutes keep Infisical (and Neon) awake.
+
+4. **Railway healthcheck**  
    Health checks must use **`/healthcheck`**, not `/api/status`.  
-   In Railway: Service → Settings → Health check path = `/healthcheck`.
+   In Railway: Service → Settings → Health check path = `/healthcheck`. Railway healthchecks are deploy-time only and do not prevent sleep.
 
-3. **Neon suspend & min CU**  
+5. **Neon suspend & min CU**  
    In Neon dashboard, for the Infisical project’s compute:
    - **Suspend timeout** should be enabled (e.g. 300 seconds), not 0 (never suspend).
    - **Min compute** should be 0.25 or “scale to zero” if available.  
    If suspend is off or min CU is high, compute can stay on and bill overnight.
 
-4. **Other clients to the same DB**  
+6. **Other clients to the same DB**  
    If anything else (e.g. another app or script) uses the same Neon DB connection string, its traffic will also show up as compute.
 
-5. **Logs at startup**  
+7. **Logs at startup**  
    After deploy, check Infisical logs for:
+   - `USE_IN_MEMORY_STORE enabled; skipping Redis clients`
    - `MINIMAL_SECRET_MANAGER_MODE enabled; skipping recurring background sync cron jobs`
-   - No “Internal queue recovery and reconciliation workers started” (that only appears when queue workers are enabled).  
-   That confirms minimal mode and no queue workers.
+   - `Skipping BullMQ initialization`
+   - No “Internal queue recovery and reconciliation workers started” (that only appears when queue workers are enabled).
 
 ## Regression guardrails
 
@@ -174,6 +200,7 @@ Small overnight charges (e.g. ~$0.01) can still happen. Check these:
 
 Optional if you ever need original behavior:
 
+- Set `USE_IN_MEMORY_STORE=false` and provide `REDIS_URL` to restore Redis cache, pub/sub, and BullMQ.
 - Set `MINIMAL_SECRET_MANAGER_MODE=false` to re-enable recurring cron sync behavior.
 - Set `QUEUE_WORKERS_ENABLED=true` to re-enable queue workers.
 

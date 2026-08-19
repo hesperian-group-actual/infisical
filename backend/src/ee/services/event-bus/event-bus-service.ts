@@ -14,7 +14,7 @@ import { createMemoryBus } from "./memory-bus";
 import { createRedisBus } from "./redis-bus";
 
 type TEventBusServiceFactoryDep = {
-  redis: Redis | Cluster;
+  redis: Redis | Cluster | null;
 };
 
 export const eventBusServiceFactory = ({ redis }: TEventBusServiceFactoryDep) => {
@@ -24,8 +24,9 @@ export const eventBusServiceFactory = ({ redis }: TEventBusServiceFactoryDep) =>
   // Create memory bus for local event delivery
   const memoryBus = createMemoryBus();
 
-  // Create Redis bus for inter-container communication
-  const redisBus = createRedisBus(redis, EventBusTopicName.CoreServers);
+  // Redis bus is only needed for multi-replica fan-out. A persistent Redis
+  // subscribe connection emits keepalives and prevents Railway serverless sleep.
+  const redisBus = redis ? createRedisBus(redis, EventBusTopicName.CoreServers) : null;
 
   /**
    * Initialize the event bus
@@ -33,6 +34,11 @@ export const eventBusServiceFactory = ({ redis }: TEventBusServiceFactoryDep) =>
    * - Bridges Redis events to memory bus (excluding events from this container)
    */
   const init = async (): Promise<void> => {
+    if (!redisBus) {
+      logger.info({ containerId }, "Event bus initialized in memory-only mode");
+      return;
+    }
+
     // Set up handler to bridge Redis events to memory bus
     redisBus.onMessage((event) => {
       // Skip events that originated from this container (already delivered locally)
@@ -63,8 +69,10 @@ export const eventBusServiceFactory = ({ redis }: TEventBusServiceFactoryDep) =>
     // Emit locally first for immediate delivery to local subscribers
     memoryBus.emit(event);
 
-    // Then broadcast to other containers via Redis
-    await redisBus.publish(event);
+    // Then broadcast to other containers via Redis when configured
+    if (redisBus) {
+      await redisBus.publish(event);
+    }
   };
 
   /**
@@ -80,7 +88,9 @@ export const eventBusServiceFactory = ({ redis }: TEventBusServiceFactoryDep) =>
    * Close the event bus and cleanup resources
    */
   const close = async (): Promise<void> => {
-    await redisBus.close();
+    if (redisBus) {
+      await redisBus.close();
+    }
     memoryBus.removeAllListeners();
     logger.info({ containerId }, "Event bus closed");
   };

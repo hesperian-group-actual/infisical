@@ -159,6 +159,10 @@ const envSchema = z
     QUEUE_WORKERS_ENABLED: zodStrBool.default("false"),
     QUEUE_WORKER_PROFILE: z.nativeEnum(QueueWorkerProfile).default(QueueWorkerProfile.All),
     MINIMAL_SECRET_MANAGER_MODE: zodStrBool.default("true"),
+    // Skip Redis entirely (in-memory cache/locks + no BullMQ sockets). Required for Railway
+    // serverless sleep: ioredis keepalives / pub-sub count as outbound traffic and reset the
+    // 10-minute inactivity timer. Single-instance secret-manager deploys should leave this on.
+    USE_IN_MEMORY_STORE: zodStrBool.default("false"),
     HTTPS_ENABLED: zodStrBool,
     ROTATION_DEVELOPMENT_MODE: zodStrBool.default("false").optional(),
     DAILY_RESOURCE_CLEAN_UP_DEVELOPMENT_MODE: zodStrBool.default("false").optional(),
@@ -454,8 +458,12 @@ const envSchema = z
     INTERNAL_REGION: zpStr(z.enum(["us", "eu"]).optional())
   })
   .refine(
-    (data) => Boolean(data.REDIS_URL) || Boolean(data.REDIS_SENTINEL_HOSTS) || Boolean(data.REDIS_CLUSTER_HOSTS),
-    "Either REDIS_URL, REDIS_SENTINEL_HOSTS or REDIS_CLUSTER_HOSTS  must be defined."
+    (data) =>
+      data.USE_IN_MEMORY_STORE ||
+      Boolean(data.REDIS_URL) ||
+      Boolean(data.REDIS_SENTINEL_HOSTS) ||
+      Boolean(data.REDIS_CLUSTER_HOSTS),
+    "Either REDIS_URL, REDIS_SENTINEL_HOSTS or REDIS_CLUSTER_HOSTS must be defined, or set USE_IN_MEMORY_STORE=true."
   )
   .transform((data) => ({
     ...data,
@@ -465,7 +473,8 @@ const envSchema = z
       : undefined,
     isCloud: Boolean(data.LICENSE_SERVER_KEY),
     isSmtpConfigured: Boolean(data.SMTP_HOST),
-    isRedisConfigured: Boolean(data.REDIS_URL || data.REDIS_SENTINEL_HOSTS || data.REDIS_CLUSTER_HOSTS),
+    isRedisConfigured:
+      !data.USE_IN_MEMORY_STORE && Boolean(data.REDIS_URL || data.REDIS_SENTINEL_HOSTS || data.REDIS_CLUSTER_HOSTS),
     isClickHouseConfigured: Boolean(data.CLICKHOUSE_URL),
     isDevelopmentMode: data.NODE_ENV === "development",
     isTestMode: data.NODE_ENV === "test",
