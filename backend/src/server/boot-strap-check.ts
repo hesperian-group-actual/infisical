@@ -65,17 +65,21 @@ export const bootstrapCheck = async ({ db }: BootstrapOpt) => {
       logger.error(err);
     });
 
-  console.log("Testing redis connection");
-  const redis = buildRedisFromConfig(appCfg);
-  const redisPing = await redis?.ping();
-  if (!redisPing) {
-    console.error("Redis - Failed to connect");
+  if (appCfg.USE_IN_MEMORY_STORE || !appCfg.isRedisConfigured) {
+    console.log("Skipping redis connection check (in-memory store / Redis not configured)");
   } else {
-    console.log("Redis successfully connected");
-    if (appCfg.isRedisSentinelMode) {
-      console.log("Redis Sentinel Mode");
+    console.log("Testing redis connection");
+    const redis = buildRedisFromConfig(appCfg);
+    const redisPing = await redis?.ping();
+    if (!redisPing) {
+      console.error("Redis - Failed to connect");
+    } else {
+      console.log("Redis successfully connected");
+      if (appCfg.isRedisSentinelMode) {
+        console.log("Redis Sentinel Mode");
+      }
+      redis.disconnect();
     }
-    redis.disconnect();
   }
 
   return bootstrapCb;
